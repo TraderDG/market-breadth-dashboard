@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VNINDEX Market Breadth Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+  <style>
+    .section-title::before { background: var(--teal); }
+
+    /* KPI grid 5 cols */
+    .kpi-grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 1100px) { .kpi-grid-5 { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 680px)  { .kpi-grid-5 { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 420px)  { .kpi-grid-5 { grid-template-columns: 1fr; } }
+
+    .dual-axis-note { font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 4px; }
+    .nhnl-info      { font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 3px; }
+
+    /* ── Improved Snapshot ─────────────────────────────── */
+    .vnindex-snapshot {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 22px 24px;
+      box-shadow: var(--shadow-sm);
+    }
+    .snapshot-header {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 20px;
+      flex-wrap: wrap; gap: 8px;
+    }
+    .snapshot-header-left h2 {
+      font-family: var(--font-display); font-size: 0.95rem;
+      font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em;
+    }
+    .snapshot-header-left p {
+      font-size: 0.72rem; color: var(--text-muted);
+      font-family: var(--font-mono); margin-top: 2px;
+    }
+    .snapshot-date-badge {
+      font-family: var(--font-mono); font-size: 0.72rem;
+      color: var(--text-muted); background: var(--surface-2);
+      border: 1px solid var(--border); padding: 4px 10px;
+      border-radius: 4px; white-space: nowrap;
+    }
+    .kpi-card.blue .kpi-value { color: var(--blue-mid); }
+
+    /* MA table band indicator in KPI card */
+    .kpi-band {
+      font-family: var(--font-mono); font-size: 0.65rem;
+      font-weight: 600; letter-spacing: 0.06em;
+      padding: 2px 6px; border-radius: 3px;
+      text-transform: uppercase;
+    }
+    .kpi-band.overbought { background: rgba(240,62,62,0.12); color: var(--red-mid); }
+    .kpi-band.oversold   { background: rgba(0,200,83,0.12);  color: var(--green-mid); }
+    .kpi-band.neutral    { background: var(--blue-dim); color: var(--blue-mid); }
+  </style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">LOADING VNINDEX BREADTH DATA…</div>
+</div>
+
+<header class="top-bar">
+  <a href="index.html" class="brand">
+    <div class="brand-icon">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <rect x="1" y="9" width="3" height="6" rx="1" fill="white" opacity="0.7"/>
+        <rect x="6" y="5" width="3" height="10" rx="1" fill="white"/>
+        <rect x="11" y="2" width="3" height="13" rx="1" fill="white" opacity="0.85"/>
+      </svg>
+    </div>
+    <span class="brand-name">VN <span>Breadth</span></span>
+  </a>
+  <nav>
+    <ul class="nav-tabs">
+      <li><a class="nav-tab" href="index.html"><span class="tab-dot"></span>VN100 Breadth</a></li>
+      <li><a class="nav-tab active" href="vnindex.html"><span class="tab-dot"></span>VNINDEX Breadth</a></li>
+    </ul>
+  </nav>
+  <div class="nav-right">
+    <div class="last-updated" id="lastUpdated">DATA THRU: —</div>
+    <div class="status-badge live"><div class="pulse"></div>LIVE DATA</div>
+  </div>
+</header>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>VNINDEX Market Breadth</h1>
+    <p>Price, A/D Line, NH-NL, and Moving-Average breadth for the broad VNINDEX</p>
+  </div>
+</div>
+
+<main class="main-content">
+
+  <!-- ── SECTION 1: Snapshot ── -->
+  <section>
+    <div class="vnindex-snapshot">
+      <div class="snapshot-header">
+        <div class="snapshot-header-left">
+          <h2>Breadth Snapshot — % Stocks Above Key MAs</h2>
+          <p>Latest reading across MA10 / MA20 / MA50 / MA100 / MA200 breadth levels</p>
+        </div>
+        <div class="snapshot-date-badge" id="kpiDate">AS OF —</div>
+      </div>
+
+      <div class="kpi-grid-5">
+
+        <div class="kpi-card blue">
+          <div class="kpi-top">
+            <div class="kpi-label">Above MA10</div>
+            <div class="kpi-icon" style="font-size:10px;font-family:var(--font-mono)">10D</div>
+          </div>
+          <div class="kpi-value" id="kpi-ma10">–</div>
+          <div class="kpi-footer">
+            <div class="kpi-change flat" id="chg-ma10">–</div>
+            <div class="sparkline-wrap"><canvas id="spark-ma10"></canvas></div>
+          </div>
+        </div>
+
+        <div class="kpi-card blue">
+          <div class="kpi-top">
+            <div class="kpi-label">Above MA20</div>
+            <div class="kpi-icon" style="font-size:10px;font-family:var(--font-mono)">20D</div>
+          </div>
+          <div class="kpi-value" id="kpi-ma20">–</div>
+          <div class="kpi-footer">
+            <div class="kpi-change flat" id="chg-ma20">–</div>
+            <div class="sparkline-wrap"><canvas id="spark-ma20"></canvas></div>
+          </div>
+        </div>
+
+        <div class="kpi-card blue">
+          <div class="kpi-top">
+            <div class="kpi-label">Above MA50</div>
+            <div class="kpi-icon" style="font-size:10px;font-family:var(--font-mono)">50D</div>
+          </div>
+          <div class="kpi-value" id="kpi-ma50">–</div>
+          <div class="kpi-footer">
+            <div class="kpi-change flat" id="chg-ma50">–</div>
+            <div class="sparkline-wrap"><canvas id="spark-ma50"></canvas></div>
+          </div>
+        </div>
+
+        <div class="kpi-card blue">
+          <div class="kpi-top">
+            <div class="kpi-label">Above MA100</div>
+            <div class="kpi-icon" style="font-size:10px;font-family:var(--font-mono)">100D</div>
+          </div>
+          <div class="kpi-value" id="kpi-ma100">–</div>
+          <div class="kpi-footer">
+            <div class="kpi-change flat" id="chg-ma100">–</div>
+            <div class="sparkline-wrap"><canvas id="spark-ma100"></canvas></div>
+          </div>
+        </div>
+
+        <div class="kpi-card blue">
+          <div class="kpi-top">
+            <div class="kpi-label">Above MA200</div>
+            <div class="kpi-icon" style="font-size:10px;font-family:var(--font-mono)">200D</div>
+          </div>
+          <div class="kpi-value" id="kpi-ma200">–</div>
+          <div class="kpi-footer">
+            <div class="kpi-change flat" id="chg-ma200">–</div>
+            <div class="sparkline-wrap"><canvas id="spark-ma200"></canvas></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 2: Price + A/D Line ── -->
+  <section>
+    <div class="section-header">
+      <div class="section-title">VNINDEX Price &amp; Advance / Decline Line</div>
+      <div class="section-controls">
+        <div class="freq-btn-group" id="freqPrice">
+          <button class="freq-btn active" data-freq="daily">Daily</button>
+          <button class="freq-btn" data-freq="weekly">Weekly</button>
+          <button class="freq-btn" data-freq="monthly">Monthly</button>
+        </div>
+        <div class="date-range-picker">
+          <label>From</label>
+          <input type="month" id="drStartPrice" />
+          <label>To</label>
+          <input type="month" id="drEndPrice" />
+          <button class="btn-apply" id="drApplyPrice">Apply</button>
+          <button class="btn-clear" id="drClearPrice">Reset</button>
+        </div>
+        <div id="rangePrice" class="chart-range-btns">
+          <button class="range-btn" data-n="22">1M</button>
+          <button class="range-btn" data-n="5">1W</button>
+          <button class="range-btn" data-n="1">1D</button>
+          <button class="range-btn" data-n="65">3M</button>
+          <button class="range-btn" data-n="260">1Y</button>
+          <button class="range-btn" data-n="780">3Y</button>
+          <button class="range-btn active" data-n="0">ALL</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <div class="chart-title">VNINDEX vs A/D Cumulative Line</div>
+          <div class="chart-subtitle">Dual-axis: Index price (left) and cumulative Advance-Decline line (right)</div>
+          <div class="dual-axis-note">Divergence between price and A/D line signals potential trend reversals</div>
+        </div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-line" style="background:#0d1117;height:2.5px"></div>VNINDEX</div>
+          <div class="legend-item"><div class="legend-line" style="background:#20c997"></div>A/D Line</div>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:340px"><canvas id="chart-priceAD"></canvas></div>
+    </div>
+  </section>
+
+  <hr class="section-divider" />
+
+  <!-- ── SECTION 3: NH-NL ── -->
+  <section>
+    <div class="section-header">
+      <div class="section-title">Market Momentum — New High / New Low Differential</div>
+      <div class="section-controls">
+        <div class="freq-btn-group" id="freqNHNL">
+          <button class="freq-btn active" data-freq="daily">Daily</button>
+          <button class="freq-btn" data-freq="weekly">Weekly</button>
+          <button class="freq-btn" data-freq="monthly">Monthly</button>
+        </div>
+        <div class="date-range-picker">
+          <label>From</label>
+          <input type="month" id="drStartNHNL" />
+          <label>To</label>
+          <input type="month" id="drEndNHNL" />
+          <button class="btn-apply" id="drApplyNHNL">Apply</button>
+          <button class="btn-clear" id="drClearNHNL">Reset</button>
+        </div>
+        <div id="rangeNHNL" class="chart-range-btns">
+          <button class="range-btn" data-n="22">1M</button>
+          <button class="range-btn" data-n="5">1W</button>
+          <button class="range-btn" data-n="1">1D</button>
+          <button class="range-btn" data-n="65">3M</button>
+          <button class="range-btn" data-n="260">1Y</button>
+          <button class="range-btn active" data-n="0">ALL</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <div>
+            <div class="chart-title">Net New High – New Low</div>
+            <div class="chart-subtitle">NH minus NL — green bars = more new highs; red = more new lows</div>
+            <div class="nhnl-info">Zero-line = equilibrium between expansion and contraction</div>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#00c853"></div>Positive (NH &gt; NL)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f03e3e"></div>Negative (NL &gt; NH)</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chart-nhnl"></canvas></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <div>
+            <div class="chart-title">NH-NL Smoothed (21-Day MA)</div>
+            <div class="chart-subtitle">21-day moving average of the NH-NL differential</div>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item"><div class="legend-line" style="background:#7950f2"></div>MA21 of NH-NL</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chart-nhnlMA"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="section-divider" />
+
+  <!-- ── SECTION 4: MA Breadth Table (replaces Multi-MA Overlay chart) ── -->
+  <section>
+    <div class="section-header">
+      <div class="section-title">Breadth Strength — VNINDEX Price &amp; MA Levels</div>
+      <div class="section-controls">
+        <div class="freq-btn-group" id="freqMA">
+          <button class="freq-btn active" data-freq="daily">Daily</button>
+          <button class="freq-btn" data-freq="weekly">Weekly</button>
+          <button class="freq-btn" data-freq="monthly">Monthly</button>
+        </div>
+        <div class="date-range-picker">
+          <label>From</label>
+          <input type="month" id="drStartMA" />
+          <label>To</label>
+          <input type="month" id="drEndMA" />
+          <button class="btn-apply" id="drApplyMA">Apply</button>
+          <button class="btn-clear" id="drClearMA">Reset</button>
+        </div>
+        <div id="rangeMA" class="chart-range-btns">
+          <button class="range-btn" data-n="22">1M</button>
+          <button class="range-btn" data-n="5">1W</button>
+          <button class="range-btn" data-n="1">1D</button>
+          <button class="range-btn" data-n="65">3M</button>
+          <button class="range-btn" data-n="260">1Y</button>
+          <button class="range-btn active" data-n="0">ALL</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <div class="chart-title">VNINDEX Price vs Moving Averages</div>
+          <div class="chart-subtitle">Daily / Weekly / Monthly — with % change arrows per row</div>
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-muted);font-family:var(--font-mono)">
+          ↑ green = above prev · ↓ red = below prev
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="ma-table-wrapper">
+        <table class="ma-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>VNINDEX</th>
+              <th>Chg%</th>
+              <th>MA10</th>
+              <th>MA20</th>
+              <th>MA50</th>
+              <th>MA100</th>
+              <th>MA200</th>
+            </tr>
+          </thead>
+          <tbody id="maTableBody">
+            <tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+        <div class="table-footer">
+          <div id="tableInfo" style="font-size:0.72rem;color:var(--text-muted);font-family:var(--font-mono)">–</div>
+          <div class="table-nav">
+            <button id="tablePrev" disabled>← Prev</button>
+            <span id="tablePageLabel" style="padding:3px 8px;font-size:0.72rem;color:var(--text-secondary)">Page 1</span>
+            <button id="tableNext">Next →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="script.js"></script>
+<script>
+/* =====================================================
+   VNINDEX PAGE — Data Load & Chart Rendering
+   ===================================================== */
+
+let chartPriceAD = null;
+let chartNHNL    = null;
+let chartNHNLMA  = null;
+
+let adData   = [];
+let nhnlData = [];
+let maData   = [];
+
+// Filter state
+let priceFreq = 'daily'; let priceStart = ''; let priceEnd = ''; let priceN = 0;
+let nhnlFreq  = 'daily'; let nhnlStart  = ''; let nhnlEnd  = ''; let nhnlN  = 0;
+let maFreq    = 'daily'; let maStart    = ''; let maEnd    = ''; let maN    = 0;
+
+// Table pagination
+const TABLE_PAGE_SIZE = 50;
+let tableCurrentPage  = 1;
+let tableData         = [];   // current filtered+agg slice for table
+
+const CSV_AD   = 'VNINDEX_A-D_line_Data.csv';
+const CSV_NHNL = 'NH_NL_Subtraction_VNINDEX_Data.csv';
+const CSV_MA   = 'Market_Breadth__aboveMA_VNINDEX_Data.csv';
+
+const MA_SUM_COLS  = [];   // all MA breadth % cols are averaged
+const AD_SUM_COLS  = [];
+const NHNL_SUM_COLS = ['Net_High_Low'];  // net = sum
+
+document.addEventListener('DOMContentLoaded', async () => {
+  showLoading();
+  try {
+    [adData, nhnlData, maData] = await Promise.all([
+      loadCSV(CSV_AD),
+      loadCSV(CSV_NHNL),
+      loadCSV(CSV_MA),
+    ]);
+
+    adData   = adData.map(r => ({ ...r, Date: cleanDate(r.Date) }));
+    nhnlData = nhnlData.map(r => ({ ...r, Date: cleanDate(r.Date) }));
+    maData   = maData.map(r => ({ ...r, Date: cleanDate(r.Date) }));
+
+    setLastUpdated(adData[adData.length - 1]?.Date);
+    const latestDate = adData[adData.length - 1]?.Date;
+    document.getElementById('kpiDate').textContent = latestDate ? 'AS OF ' + latestDate : '';
+
+    populateMAKPIs();
+    drawPriceAD();
+    drawNHNL();
+    renderMATable();
+
+    // Freq buttons
+    wireFreqButtons('freqPrice', (f) => { priceFreq = f; drawPriceAD(); });
+    wireFreqButtons('freqNHNL',  (f) => { nhnlFreq  = f; drawNHNL(); });
+    wireFreqButtons('freqMA',    (f) => { maFreq    = f; tableCurrentPage = 1; renderMATable(); });
+
+    // Date range pickers
+    wireDateRangePicker('drStartPrice', 'drEndPrice', 'drApplyPrice',
+      (s,e) => { priceStart=s; priceEnd=e; drawPriceAD(); }, 'drClearPrice');
+    wireDateRangePicker('drStartNHNL', 'drEndNHNL', 'drApplyNHNL',
+      (s,e) => { nhnlStart=s; nhnlEnd=e; drawNHNL(); }, 'drClearNHNL');
+    wireDateRangePicker('drStartMA', 'drEndMA', 'drApplyMA',
+      (s,e) => { maStart=s; maEnd=e; tableCurrentPage=1; renderMATable(); }, 'drClearMA');
+
+    // Preset range buttons
+    wireRangeButtons('rangePrice', (n) => { priceN=n; priceStart=''; priceEnd='';
+      document.getElementById('drStartPrice').value=''; document.getElementById('drEndPrice').value=''; drawPriceAD(); });
+    wireRangeButtons('rangeNHNL',  (n) => { nhnlN=n;  nhnlStart=''; nhnlEnd='';
+      document.getElementById('drStartNHNL').value=''; document.getElementById('drEndNHNL').value=''; drawNHNL(); });
+    wireRangeButtons('rangeMA',    (n) => { maN=n; maStart=''; maEnd='';
+      document.getElementById('drStartMA').value=''; document.getElementById('drEndMA').value='';
+      tableCurrentPage=1; renderMATable(); });
+
+    // Table pagination
+    document.getElementById('tablePrev').addEventListener('click', () => {
+      if (tableCurrentPage > 1) { tableCurrentPage--; renderTablePage(); }
+    });
+    document.getElementById('tableNext').addEventListener('click', () => {
+      const maxPage = Math.ceil(tableData.length / TABLE_PAGE_SIZE);
+      if (tableCurrentPage < maxPage) { tableCurrentPage++; renderTablePage(); }
+    });
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById('loadingOverlay').innerHTML =
+      '<div style="color:#f03e3e;font-family:monospace;font-size:14px">⚠ Error loading CSV files.</div>';
+    return;
+  }
+  hideLoading();
+});
+
+// ── Slice helpers ────────────────────────────────────
+function getSliceAD() {
+  let d = adData;
+  if (priceStart || priceEnd) d = filterByDateRange(d, priceStart, priceEnd);
+  else if (priceN) d = lastN(d, priceN);
+  if (priceFreq === 'weekly')  return aggregateWeekly(d, AD_SUM_COLS);
+  if (priceFreq === 'monthly') return aggregateMonthly(d, AD_SUM_COLS);
+  return d;
+}
+
+function getSliceNHNL() {
+  let d = nhnlData;
+  if (nhnlStart || nhnlEnd) d = filterByDateRange(d, nhnlStart, nhnlEnd);
+  else if (nhnlN) d = lastN(d, nhnlN);
+  if (nhnlFreq === 'weekly')  return aggregateWeekly(d, NHNL_SUM_COLS);
+  if (nhnlFreq === 'monthly') return aggregateMonthly(d, NHNL_SUM_COLS);
+  return d;
+}
+
+function getSliceMA() {
+  let d = maData;
+  if (maStart || maEnd) d = filterByDateRange(d, maStart, maEnd);
+  else if (maN) d = lastN(d, maN);
+  if (maFreq === 'weekly')  return aggregateWeekly(d, MA_SUM_COLS);
+  if (maFreq === 'monthly') return aggregateMonthly(d, MA_SUM_COLS);
+  return d;
+}
+
+// ── KPI Population ────────────────────────────────────
+function populateMAKPIs() {
+  const last = maData[maData.length - 1] || {};
+  const prev = maData[maData.length - 2] || {};
+  const SPARK = 30;
+  const tail  = (col) => lastN(maData, SPARK).map(r => r[col] ?? 0);
+
+  updateKpiCard('kpi-ma10',  'chg-ma10',  last.MA10,  prev.MA10,  'pct');
+  updateKpiCard('kpi-ma20',  'chg-ma20',  last.MA20,  prev.MA20,  'pct');
+  updateKpiCard('kpi-ma50',  'chg-ma50',  last.MA50,  prev.MA50,  'pct');
+  updateKpiCard('kpi-ma100', 'chg-ma100', last.MA100, prev.MA100, 'pct');
+  updateKpiCard('kpi-ma200', 'chg-ma200', last.MA200, prev.MA200, 'pct');
+
+  buildSparkline('spark-ma10',  tail('MA10'),  '#228be6');
+  buildSparkline('spark-ma20',  tail('MA20'),  '#20c997');
+  buildSparkline('spark-ma50',  tail('MA50'),  '#fd7e14');
+  buildSparkline('spark-ma100', tail('MA100'), '#7950f2');
+  buildSparkline('spark-ma200', tail('MA200'), '#f03e3e');
+}
+
+// ── Chart 1: Price + A/D ──────────────────────────────
+function drawPriceAD() {
+  const slice  = getSliceAD();
+  const labels = slice.map(r => r.Date);
+  const price  = slice.map(r => r.VNINDEX ?? null);
+  const adLine = slice.map(r => r.AD_Line ?? null);
+
+  destroyChart(chartPriceAD);
+  const ctx = document.getElementById('chart-priceAD').getContext('2d');
+  chartPriceAD = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'VNINDEX', data: price, borderColor: '#0d1117', backgroundColor: createGradient(ctx,'#0d1117',0.12,0), borderWidth:2, pointRadius:0, tension:0.3, fill:true, yAxisID:'yPrice', spanGaps:true },
+        { label: 'A/D Line', data: adLine, borderColor:'#20c997', backgroundColor: createGradient(ctx,'#20c997',0.14,0), borderWidth:1.8, pointRadius:0, tension:0.3, fill:true, yAxisID:'yAD', spanGaps:true },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ label:(ctx)=> ctx.dataset.yAxisID==='yPrice' ? ` VNINDEX: ${ctx.parsed.y?.toFixed(2)??'–'}` : ` A/D Line: ${ctx.parsed.y?.toLocaleString()??'–'}` } }
+      },
+      scales:{
+        x:{ ticks:{ maxTicksLimit:12, maxRotation:0, callback:sparseTickCallback(12,labels,formatDateShort) }, grid:{display:false} },
+        yPrice:{ type:'linear', position:'left', grid:{color:'rgba(0,0,0,0.04)'}, ticks:{callback:(v)=>v.toFixed(0)}, title:{display:true,text:'VNINDEX',color:'#8b95a1',font:{size:10}} },
+        yAD:   { type:'linear', position:'right', grid:{drawOnChartArea:false}, ticks:{callback:(v)=>(v/1000).toFixed(0)+'k'}, title:{display:true,text:'A/D Line',color:'#20c997',font:{size:10}} },
+      }
+    }
+  });
+}
+
+// ── Chart 2 & 3: NH-NL ───────────────────────────────
+function drawNHNL() {
+  const slice  = getSliceNHNL();
+  const labels = slice.map(r => r.Date);
+  const net    = slice.map(r => r.Net_High_Low ?? 0);
+  const ma21   = slice.map(r => r.Indicator_MA21 ?? null);
+  const barColors = net.map(v => v >= 0 ? 'rgba(0,200,83,0.75)' : 'rgba(240,62,62,0.72)');
+
+  destroyChart(chartNHNL);
+  const ctx1 = document.getElementById('chart-nhnl').getContext('2d');
+  chartNHNL = new Chart(ctx1, {
+    type:'bar',
+    data:{ labels, datasets:[{ label:'NH-NL Net', data:net, backgroundColor:barColors, borderWidth:0, borderRadius:2 }] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:(ctx)=>` NH-NL: ${ctx.parsed.y>0?'+':''}${ctx.parsed.y}` } } },
+      scales:{
+        x:{ ticks:{ maxTicksLimit:8, maxRotation:0, callback:sparseTickCallback(8,labels,formatDateShort) }, grid:{display:false} },
+        y:{ grid:{color:'rgba(0,0,0,0.04)'}, ticks:{ callback:(v)=>(v>0?'+':'')+v } }
+      }
+    }
+  });
+
+  destroyChart(chartNHNLMA);
+  const ctx2 = document.getElementById('chart-nhnlMA').getContext('2d');
+  chartNHNLMA = new Chart(ctx2, {
+    type:'line',
+    data:{ labels, datasets:[{ label:'NH-NL MA21', data:ma21, borderColor:'#7950f2', backgroundColor:createGradient(ctx2,'#7950f2',0.18,0), borderWidth:2, pointRadius:0, tension:0.4, fill:true, spanGaps:true }] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{display:false} },
+      scales:{
+        x:{ ticks:{ maxTicksLimit:8, maxRotation:0, callback:sparseTickCallback(8,labels,formatDateShort) }, grid:{display:false} },
+        y:{ grid:{color:'rgba(0,0,0,0.04)'}, ticks:{ callback:(v)=>(v>0?'+':'')+v.toFixed(1) } }
+      }
+    }
+  });
+}
+
+// ── MA Breadth Table ──────────────────────────────────
+function renderMATable() {
+  // Get the full filtered slice (newest-first for display)
+  const raw   = getSliceMA();
+  tableData   = [...raw].reverse();  // show newest at top
+  tableCurrentPage = 1;
+  renderTablePage();
+}
+
+function renderTablePage() {
+  const tbody    = document.getElementById('maTableBody');
+  const start    = (tableCurrentPage - 1) * TABLE_PAGE_SIZE;
+  const end      = start + TABLE_PAGE_SIZE;
+  const pageRows = tableData.slice(start, end);
+  const maxPage  = Math.ceil(tableData.length / TABLE_PAGE_SIZE) || 1;
+
+  // Update pagination controls
+  document.getElementById('tableInfo').textContent =
+    `Showing ${start+1}–${Math.min(end, tableData.length)} of ${tableData.length} rows`;
+  document.getElementById('tablePageLabel').textContent = `Page ${tableCurrentPage} / ${maxPage}`;
+  document.getElementById('tablePrev').disabled = (tableCurrentPage <= 1);
+  document.getElementById('tableNext').disabled = (tableCurrentPage >= maxPage);
+
+  // Build HTML
+  if (pageRows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted)">No data for selected range.</td></tr>';
+    return;
+  }
+
+  // For % change calculation we need the previous row in the FULL tableData array
+  const rows = pageRows.map((row, relIdx) => {
+    const absIdx = start + relIdx;
+    // Previous row = next in tableData (since it's reversed = older date)
+    const prev   = tableData[absIdx + 1] ?? null;
+
+    const price    = row.VNINDEX ?? null;
+    const prevPct  = prev?.VNINDEX ?? null;
+    const chgPct   = (price != null && prevPct != null && prevPct !== 0)
+      ? ((price - prevPct) / prevPct * 100)
+      : null;
+
+    const fmtPrice = (v) => v != null ? v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '–';
+    const fmtPct   = (v) => v != null ? v.toFixed(2)+'%' : '–';
+    const fmtMA    = (v) => v != null ? v.toFixed(2) : '–';
+
+    const chgClass = chgPct == null ? '' : chgPct > 0 ? 'up' : chgPct < 0 ? 'down' : '';
+    const arrow    = chgPct == null ? '' : chgPct > 0 ? '↑' : chgPct < 0 ? '↓' : '–';
+
+    return `<tr>
+      <td class="date-col">${row.Date ?? '–'}</td>
+      <td class="price-col">${fmtPrice(price)}</td>
+      <td><span class="pct-cell ${chgClass}"><span class="arrow">${arrow}</span>${fmtPct(chgPct)}</span></td>
+      <td>${fmtMA(row.MA10)}</td>
+      <td>${fmtMA(row.MA20)}</td>
+      <td>${fmtMA(row.MA50)}</td>
+      <td>${fmtMA(row.MA100)}</td>
+      <td>${fmtMA(row.MA200)}</td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = rows.join('');
+}
+</script>
+</body>
+</html>
