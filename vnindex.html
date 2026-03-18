@@ -104,21 +104,13 @@
     }
     /* height is set via inline style on each .ma-panel-canvas-wrap */
 
-    /* ── Enhanced MA Table ────────────────────────────── */
-    /* Row-level coloring: ALL MAs above/below 50% */
-    .ma-table tr.row-all-green td { background: rgba(0,200,83,0.08) !important; }
-    .ma-table tr.row-all-green td .ma-val { color: #00c853; font-weight: 600; }
-    .ma-table tr.row-all-green td.price-col { color: #00c853; }
+    /* ── MA Table Cell Colors ────────────────────────── */
+    /* Per-cell: xanh nếu >50%, đỏ nếu <50% */
+    .ma-table td.cell-green .ma-val { color: #00c853; font-weight: 600; }
+    .ma-table td.cell-green         { background: rgba(0,200,83,0.10) !important; }
 
-    .ma-table tr.row-all-red td { background: rgba(240,62,62,0.08) !important; }
-    .ma-table tr.row-all-red td .ma-val { color: #f03e3e; font-weight: 600; }
-    .ma-table tr.row-all-red td.price-col { color: #f03e3e; }
-
-    /* Cell heatmap (still applied per-cell when row is mixed) */
-    .ma-table tr:not(.row-all-green):not(.row-all-red) td.heat-green-strong { background: rgba(0,200,83,0.18) !important; }
-    .ma-table tr:not(.row-all-green):not(.row-all-red) td.heat-green-mid    { background: rgba(0,200,83,0.09) !important; }
-    .ma-table tr:not(.row-all-green):not(.row-all-red) td.heat-red-mid      { background: rgba(240,62,62,0.09) !important; }
-    .ma-table tr:not(.row-all-green):not(.row-all-red) td.heat-red-strong   { background: rgba(240,62,62,0.18) !important; }
+    .ma-table td.cell-red .ma-val   { color: #f03e3e; font-weight: 600; }
+    .ma-table td.cell-red           { background: rgba(240,62,62,0.10) !important; }
 
     /* Delta badge inside MA cell */
     .ma-delta {
@@ -509,7 +501,7 @@
           <span style="opacity:0.7">🟢 tất cả &gt;50% &nbsp;|&nbsp; 🔴 tất cả &lt;50%</span>
         </div>
       </div>
-      <div class="ma-table-wrapper">
+      <div class="ma-table-wrapper" style="max-height:600px;overflow-y:auto;">
         <table class="ma-table">
           <thead><tr id="maTableHead">
             <th>Date</th><th>VNINDEX</th><th>Chg%</th>
@@ -521,11 +513,6 @@
         </table>
         <div class="table-footer">
           <div id="tableInfo" style="font-size:0.72rem;color:var(--text-muted);font-family:var(--font-mono)">–</div>
-          <div class="table-nav">
-            <button id="tablePrev" disabled>← Prev</button>
-            <span id="tablePageLabel" style="padding:3px 8px;font-size:0.72rem;color:var(--text-secondary)">Page 1</span>
-            <button id="tableNext">Next →</button>
-          </div>
         </div>
       </div>
     </div>
@@ -672,14 +659,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderMATable();
     });
 
-    // Table pagination
-    document.getElementById('tablePrev').addEventListener('click', () => {
-      if (tableCurrentPage > 1) { tableCurrentPage--; renderTablePage(); }
-    });
-    document.getElementById('tableNext').addEventListener('click', () => {
-      const maxPage = Math.ceil(tableData.length / TABLE_PAGE_SIZE);
-      if (tableCurrentPage < maxPage) { tableCurrentPage++; renderTablePage(); }
-    });
+    // Table — no pagination, all rows rendered at once
 
   } catch (err) {
     console.error(err);
@@ -1014,7 +994,7 @@ function drawMAChart() {
 
 // ── MA Breadth Table ──────────────────────────────────
 function renderMATable() {
-  // Rebuild table header to match selected MAs
+  // Rebuild header to match selected MAs
   const headRow = document.getElementById('maTableHead');
   headRow.innerHTML = `
     <th>Date</th><th>VNINDEX</th><th>Chg%</th>
@@ -1023,50 +1003,31 @@ function renderMATable() {
     </th>`).join('')}`;
 
   const raw = getSliceMA();
-  tableData = [...raw].reverse();
-  tableCurrentPage = 1;
+  tableData = [...raw].reverse(); // newest first
   renderTablePage();
-}
-
-function maHeatClass(val) {
-  if (val == null) return '';
-  if (val >= 70)  return 'heat-green-strong';
-  if (val >= 55)  return 'heat-green-mid';
-  if (val <= 30)  return 'heat-red-strong';
-  if (val <= 45)  return 'heat-red-mid';
-  return '';
 }
 
 function maBarColor(val) {
   if (val == null) return '#8b95a1';
-  if (val >= 70) return '#00c853';
-  if (val >= 50) return '#74c0fc';
-  if (val <= 30) return '#f03e3e';
-  return '#f59f00';
+  if (val >= 50) return '#00c853';
+  return '#f03e3e';
 }
 
 function renderTablePage() {
   const tbody    = document.getElementById('maTableBody');
-  const start    = (tableCurrentPage - 1) * TABLE_PAGE_SIZE;
-  const end      = start + TABLE_PAGE_SIZE;
-  const pageRows = tableData.slice(start, end);
-  const maxPage  = Math.ceil(tableData.length / TABLE_PAGE_SIZE) || 1;
   const colCount = 3 + selectedMAs.length;
+  const total    = tableData.length;
 
   document.getElementById('tableInfo').textContent =
-    `Showing ${start+1}–${Math.min(end, tableData.length)} of ${tableData.length} rows`;
-  document.getElementById('tablePageLabel').textContent = `Page ${tableCurrentPage} / ${maxPage}`;
-  document.getElementById('tablePrev').disabled = (tableCurrentPage <= 1);
-  document.getElementById('tableNext').disabled = (tableCurrentPage >= maxPage);
+    `${total.toLocaleString()} rows · ${selectedMAs.join(', ')}`;
 
-  if (pageRows.length === 0) {
+  if (total === 0) {
     tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:24px;color:var(--text-muted)">No data for selected range.</td></tr>`;
     return;
   }
 
-  const rows = pageRows.map((row, relIdx) => {
-    const absIdx = start + relIdx;
-    const prev   = tableData[absIdx + 1] ?? null;
+  const rows = tableData.map((row, idx) => {
+    const prev = tableData[idx + 1] ?? null;
 
     // ── VNINDEX price + Chg% ──
     const price  = row.VNINDEX ?? null;
@@ -1080,22 +1041,16 @@ function renderTablePage() {
     const chgClass = chgPct == null ? '' : chgPct > 0 ? 'up' : chgPct < 0 ? 'down' : '';
     const arrow    = chgPct == null ? '' : chgPct > 0 ? '↑' : chgPct < 0 ? '↓' : '';
 
-    // ── Row-level regime based on SELECTED MAs only ──
-    const maVals     = selectedMAs.map(k => row[k]).filter(v => v != null);
-    const allAbove50 = maVals.length === selectedMAs.length && maVals.every(v => v > 50);
-    const allBelow50 = maVals.length === selectedMAs.length && maVals.every(v => v < 50);
-    const rowClass   = allAbove50 ? 'row-all-green' : allBelow50 ? 'row-all-red' : '';
-
-    // ── Regime badge: N/total selected ──
-    const aboveCount  = selectedMAs.filter(k => row[k] != null && row[k] >= 50).length;
-    const totalSel    = selectedMAs.length;
-    const regimeHtml  = aboveCount === totalSel
+    // ── Regime badge: count selected MAs above 50% ──
+    const aboveCount = selectedMAs.filter(k => row[k] != null && row[k] > 50).length;
+    const totalSel   = selectedMAs.length;
+    const regimeHtml = aboveCount === totalSel
       ? '<span class="regime-badge regime-bull">BULL</span>'
       : aboveCount === 0
         ? '<span class="regime-badge regime-bear">BEAR</span>'
         : `<span class="regime-badge regime-neut">${aboveCount}/${totalSel}</span>`;
 
-    // ── MA cells (only selected MAs) ──
+    // ── MA cells: green if >50%, red if <50% ──
     const maCells = selectedMAs.map(k => {
       const cur   = row[k];
       const prv   = prev?.[k];
@@ -1112,12 +1067,13 @@ function renderTablePage() {
         }
       }
 
-      const heatCls  = rowClass ? '' : maHeatClass(cur);
-      const barPct   = cur != null ? cur.toFixed(1) : 0;
+      // Simple: xanh >50%, đỏ <50%
+      const cellCls  = cur == null ? '' : cur > 50 ? 'cell-green' : 'cell-red';
       const barColor = maBarColor(cur);
+      const barPct   = cur != null ? Math.min(cur, 100).toFixed(1) : 0;
       const valStr   = cur != null ? cur.toFixed(2) : '–';
 
-      return `<td class="${heatCls}">
+      return `<td class="${cellCls}">
         <span class="ma-val">${valStr}</span>${deltaHtml}
         <div class="ma-bar-wrap">
           <div class="ma-bar-fill" style="width:${barPct}%;background:${barColor}"></div>
@@ -1125,7 +1081,7 @@ function renderTablePage() {
       </td>`;
     }).join('');
 
-    return `<tr class="${rowClass}">
+    return `<tr>
       <td class="date-col">${row.Date ?? '–'}</td>
       <td class="price-col">${fmtPrice(price)}${regimeHtml}</td>
       <td><span class="pct-cell ${chgClass}"><span class="arrow">${arrow}</span>${fmtPct(chgPct)}</span></td>
