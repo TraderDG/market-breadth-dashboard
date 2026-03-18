@@ -68,29 +68,41 @@
       display: flex;
       flex-direction: column;
       gap: 0;
-      padding: 0 16px 0 16px;
+      padding: 0 8px 0 8px;
     }
     .ma-panel-row {
       position: relative;
+      display: flex;
+      align-items: stretch;
       border-bottom: 1px solid rgba(0,0,0,0.05);
     }
     .ma-panel-row:last-child { border-bottom: none; }
     .ma-panel-tag {
-      position: absolute;
-      left: 6px; top: 50%;
-      transform: translateY(-50%);
+      flex: 0 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-family: var(--font-mono);
-      font-size: 0.62rem;
+      font-size: 0.58rem;
       font-weight: 700;
       letter-spacing: 0.06em;
       color: var(--text-muted);
-      z-index: 2;
-      pointer-events: none;
       writing-mode: vertical-lr;
       text-orientation: mixed;
+      padding: 4px 0;
+      user-select: none;
     }
+    /* ★ KEY FIX: Chart.js maintainAspectRatio:false needs
+       position:relative + explicit height on the direct parent */
     .ma-panel-canvas-wrap {
-      margin-left: 22px;
+      flex: 1 1 0;
+      position: relative;  /* REQUIRED by Chart.js */
+      min-width: 0;
+    }
+    .ma-panel-canvas-wrap canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
     }
 
     /* ── Enhanced MA Table ────────────────────────────── */
