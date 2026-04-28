@@ -177,6 +177,8 @@ def list_folder_files(folder_id: str) -> dict[str, str]:
             fields="nextPageToken, files(id, name)",
             pageSize=200,
             pageToken=page_token,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
         ).execute()
         for f in resp.get("files", []):
             result[f["name"]] = f["id"]
@@ -208,7 +210,7 @@ def find_file_id(folder_key: str, filename: str) -> str | None:
 def download_csv(file_id: str, indicator_name: str) -> pd.DataFrame:
     """Download a CSV from Drive and return a clean DataFrame."""
     svc = drive_service()
-    request = svc.files().get_media(fileId=file_id)
+    request = svc.files().get_media(fileId=file_id, supportsAllDrives=True)
     buf = io.BytesIO()
     downloader = MediaIoBaseDownload(buf, request)
     done = False
