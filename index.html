@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VN100 Market Breadth Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+  <style>
+    /* ── VN100-specific snapshot overrides ───────────── */
+    .snapshot-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 22px 24px;
+      box-shadow: var(--shadow-sm);
+    }
+    .snapshot-header {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 20px;
+      flex-wrap: wrap; gap: 8px;
+    }
+    .snapshot-header-left h2 {
+      font-family: var(--font-display);
+      font-size: 0.95rem; font-weight: 700;
+      color: var(--text-primary); letter-spacing: -0.01em;
+    }
+    .snapshot-header-left p {
+      font-size: 0.72rem; color: var(--text-muted);
+      font-family: var(--font-mono); margin-top: 2px;
+    }
+    .snapshot-meta {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .snapshot-date-badge {
+      font-family: var(--font-mono); font-size: 0.72rem;
+      color: var(--text-muted); background: var(--surface-2);
+      border: 1px solid var(--border); padding: 4px 10px;
+      border-radius: 4px; white-space: nowrap;
+    }
+    /* Group daily + quarterly KPIs in one visual row */
+    .snapshot-groups {
+      display: flex; flex-direction: column; gap: 18px;
+    }
+    .snapshot-group-label {
+      font-size: 0.68rem; font-family: var(--font-mono);
+      font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px dashed var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">LOADING VN100 BREADTH DATA…</div>
+</div>
+
+<header class="top-bar">
+  <a href="index.html" class="brand">
+    <div class="brand-icon">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <rect x="1" y="9" width="3" height="6" rx="1" fill="white" opacity="0.7"/>
+        <rect x="6" y="5" width="3" height="10" rx="1" fill="white"/>
+        <rect x="11" y="2" width="3" height="13" rx="1" fill="white" opacity="0.85"/>
+      </svg>
+    </div>
+    <span class="brand-name">VN <span>Breadth</span></span>
+  </a>
+  <nav>
+    <ul class="nav-tabs">
+      <li><a class="nav-tab active" href="index.html"><span class="tab-dot"></span>VN100 Breadth</a></li>
+      <li><a class="nav-tab" href="vnindex.html"><span class="tab-dot"></span>VNINDEX Breadth</a></li>
+    </ul>
+  </nav>
+  <div class="nav-right">
+    <div class="last-updated" id="lastUpdated">DATA THRU: —</div>
+    <div class="status-badge live"><div class="pulse"></div>LIVE DATA</div>
+  </div>
+</header>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>VN100 Market Breadth</h1>
+    <p>Daily & Quarterly breadth indicators across the VN100 stock universe</p>
+  </div>
+</div>
+
+<main class="main-content">
+
+  <!-- ── SECTION 1: Snapshot ── -->
+  <section>
+    <div class="snapshot-section">
+      <div class="snapshot-header">
+        <div class="snapshot-header-left">
+          <h2>Snapshot — Latest Reading</h2>
+          <p>Most recent values across all breadth metrics</p>
+        </div>
+        <div class="snapshot-meta">
+          <div class="snapshot-date-badge" id="kpiDate">AS OF —</div>
+        </div>
+      </div>
+
+      <div class="snapshot-groups">
+        <!-- Daily group -->
+        <div>
+          <div class="snapshot-group-label">📅 Daily Breadth</div>
+          <div class="snapshot-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))">
+
+            <div class="kpi-card green">
+              <div class="kpi-top">
+                <div class="kpi-label">Stocks Up &gt;2% Daily</div>
+                <div class="kpi-icon">↑</div>
+              </div>
+              <div class="kpi-value" id="kpi-up2">–</div>
+              <div class="kpi-footer">
+                <div class="kpi-change flat" id="chg-up2">–</div>
+                <div class="sparkline-wrap"><canvas id="spark-up2"></canvas></div>
+              </div>
+            </div>
+
+            <div class="kpi-card red">
+              <div class="kpi-top">
+                <div class="kpi-label">Stocks Down &gt;2% Daily</div>
+                <div class="kpi-icon">↓</div>
+              </div>
+              <div class="kpi-value" id="kpi-dn2">–</div>
+              <div class="kpi-footer">
+                <div class="kpi-change flat" id="chg-dn2">–</div>
+                <div class="sparkline-wrap"><canvas id="spark-dn2"></canvas></div>
+              </div>
+            </div>
+
+            <div class="kpi-card blue">
+              <div class="kpi-top">
+                <div class="kpi-label">5-Day A/D Ratio</div>
+                <div class="kpi-icon">≡</div>
+              </div>
+              <div class="kpi-value" id="kpi-ad5">–</div>
+              <div class="kpi-footer">
+                <div class="kpi-change flat" id="chg-ad5">–</div>
+                <div class="sparkline-wrap"><canvas id="spark-ad5"></canvas></div>
+              </div>
+            </div>
+
+            <div class="kpi-card blue">
+              <div class="kpi-top">
+                <div class="kpi-label">10-Day A/D Ratio</div>
+                <div class="kpi-icon">≡</div>
+              </div>
+              <div class="kpi-value" id="kpi-ad10">–</div>
+              <div class="kpi-footer">
+                <div class="kpi-change flat" id="chg-ad10">–</div>
+                <div class="sparkline-wrap"><canvas id="spark-ad10"></canvas></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Quarterly group -->
+        <div>
+          <div class="snapshot-group-label">📊 Quarterly Breadth</div>
+          <div class="snapshot-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))">
+
+            <div class="kpi-card green">
+              <div class="kpi-top">
+                <div class="kpi-label">Stocks Up &gt;10% Quarterly</div>
+                <div class="kpi-icon">↑</div>
+              </div>
+              <div class="kpi-value" id="kpi-qup">–</div>
+              <div class="kpi-footer">
+                <div class="kpi-change flat" id="chg-qup">–</div>
+                <div class="sparkline-wrap"><canvas id="spark-qup"></canvas></div>
+              </div>
+            </div>
+
+            <div class="kpi-card red">
+              <div class="kpi-top">
+                <div class="kpi-label">Stocks Down &gt;10% Quarterly</div>
+                <div class="kpi-icon">↓</div>
+              </div>
+              <div class="kpi-value" id="kpi-qdn">–</div>
+              <div class="kpi-footer">
+                <div class="kpi-change flat" id="chg-qdn">–</div>
+                <div class="sparkline-wrap"><canvas id="spark-qdn"></canvas></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 2: Daily Breadth Charts ── -->
+  <section>
+    <div class="section-header">
+      <div class="section-title">Daily Breadth Activity</div>
+      <div class="section-controls">
+        <!-- Frequency selector -->
+        <div class="freq-btn-group" id="freqDaily">
+          <button class="freq-btn active" data-freq="daily">Daily</button>
+          <button class="freq-btn" data-freq="weekly">Weekly</button>
+          <button class="freq-btn" data-freq="monthly">Monthly</button>
+        </div>
+        <!-- Date range picker -->
+        <div class="date-range-picker">
+          <label>From</label>
+          <input type="month" id="drStartDaily" />
+          <label>To</label>
+          <input type="month" id="drEndDaily" />
+          <button class="btn-apply" id="drApplyDaily">Apply</button>
+          <button class="btn-clear" id="drClearDaily">Reset</button>
+        </div>
+        <!-- Preset N-row range -->
+        <div id="rangeDaily" class="chart-range-btns">
+          <button class="range-btn" data-n="22">1M</button>
+          <button class="range-btn" data-n="5">1W</button>
+          <button class="range-btn" data-n="1">1D</button>
+          <button class="range-btn" data-n="65">3M</button>
+          <button class="range-btn" data-n="130">6M</button>
+          <button class="range-btn" data-n="260">1Y</button>
+          <button class="range-btn active" data-n="0">ALL</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <div>
+            <div class="chart-title">Stocks Moving ±2% — Count</div>
+            <div class="chart-subtitle">Number of VN100 stocks closing up or down more than 2%</div>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#00c853"></div>Up &gt;2%</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f03e3e"></div>Down &gt;2%</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chart-dailyBars"></canvas></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <div>
+            <div class="chart-title">Advance / Decline Ratio</div>
+            <div class="chart-subtitle">5-day and 10-day rolling A/D ratio (&gt;1 = more advances)</div>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item"><div class="legend-line" style="background:#228be6"></div>AD-5</div>
+            <div class="legend-item"><div class="legend-line" style="background:#fd7e14"></div>AD-10</div>
+          </div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="chart-adRatio"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="section-divider" />
+
+  <!-- ── SECTION 3: Quarterly Breadth ── -->
+  <section>
+    <div class="section-header">
+      <div class="section-title">Quarterly Breadth</div>
+      <div class="section-controls">
+        <div class="freq-btn-group" id="freqQuarterly">
+          <button class="freq-btn active" data-freq="daily">Daily</button>
+          <button class="freq-btn" data-freq="weekly">Weekly</button>
+          <button class="freq-btn" data-freq="monthly">Monthly</button>
+        </div>
+        <div class="date-range-picker">
+          <label>From</label>
+          <input type="month" id="drStartQ" />
+          <label>To</label>
+          <input type="month" id="drEndQ" />
+          <button class="btn-apply" id="drApplyQ">Apply</button>
+          <button class="btn-clear" id="drClearQ">Reset</button>
+        </div>
+        <div id="rangeQuarterly" class="chart-range-btns">
+          <button class="range-btn" data-n="22">1M</button>
+          <button class="range-btn" data-n="5">1W</button>
+          <button class="range-btn" data-n="1">1D</button>
+          <button class="range-btn" data-n="65">3M</button>
+          <button class="range-btn" data-n="130">6M</button>
+          <button class="range-btn" data-n="260">1Y</button>
+          <button class="range-btn active" data-n="0">ALL</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div>
+          <div class="chart-title">Stocks Up / Down &gt;10% — Quarterly Return</div>
+          <div class="chart-subtitle">Count of VN100 stocks with quarterly gain or loss exceeding 10%</div>
+        </div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#00c853"></div>Up &gt;10%</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#f03e3e"></div>Down &gt;10%</div>
+        </div>
+      </div>
+      <div class="chart-wrap tall"><canvas id="chart-quarterly"></canvas></div>
+    </div>
+  </section>
+
+</main>
+
+<script src="script.js"></script>
+<script>
+/* =====================================================
+   VN100 PAGE — Data Load & Chart Rendering
+   ===================================================== */
+
+let chartDailyBars = null;
+let chartAdRatio   = null;
+let chartQuarterly = null;
+
+let dailyData     = [];
+let quarterlyData = [];
+
+// Active filter state
+let dailyFreq   = 'daily';
+let dailyStart  = '';
+let dailyEnd    = '';
+let dailyN      = 0;
+
+let quarterlyFreq  = 'daily';
+let quarterlyStart = '';
+let quarterlyEnd   = '';
+let quarterlyN     = 0;
+
+const CSV_DAILY     = 'market_breadth_vn100_returndaily_ADratio.csv';
+const CSV_QUARTERLY = 'market_breadth_vn100_quarterlyreturn.csv';
+
+// ── Sum cols for aggregation (counts should be summed, ratios averaged) ──
+const DAILY_SUM_COLS = ['Number_of_stocks_up_2pct', 'Number_of_stocks_down_2pct'];
+const Q_SUM_COLS     = ['Number_of_stocks_up_10pct_quarterly', 'Number_of_stocks_down_10pct_quarterly'];
+
+document.addEventListener('DOMContentLoaded', async () => {
+  showLoading();
+  try {
+    [dailyData, quarterlyData] = await Promise.all([
+      loadCSV(CSV_DAILY),
+      loadCSV(CSV_QUARTERLY),
+    ]);
+
+    dailyData     = dailyData.map(r => ({ ...r, Date: cleanDate(r.Date) }));
+    quarterlyData = quarterlyData.map(r => ({ ...r, Date: cleanDate(r.Date) }));
+
+    populateKPIs();
+    drawDailyCharts();
+    drawQuarterlyChart();
+
+    // ── Frequency buttons ──
+    wireFreqButtons('freqDaily', (f) => { dailyFreq = f; drawDailyCharts(); });
+    wireFreqButtons('freqQuarterly', (f) => { quarterlyFreq = f; drawQuarterlyChart(); });
+
+    // ── Date range pickers ──
+    wireDateRangePicker('drStartDaily', 'drEndDaily', 'drApplyDaily',
+      (s, e) => { dailyStart = s; dailyEnd = e; drawDailyCharts(); },
+      'drClearDaily'
+    );
+    wireDateRangePicker('drStartQ', 'drEndQ', 'drApplyQ',
+      (s, e) => { quarterlyStart = s; quarterlyEnd = e; drawQuarterlyChart(); },
+      'drClearQ'
+    );
+
+    // ── Preset range buttons ──
+    wireRangeButtons('rangeDaily',     (n) => { dailyN = n; dailyStart = ''; dailyEnd = '';
+      document.getElementById('drStartDaily').value = '';
+      document.getElementById('drEndDaily').value   = '';
+      drawDailyCharts(); });
+    wireRangeButtons('rangeQuarterly', (n) => { quarterlyN = n; quarterlyStart = ''; quarterlyEnd = '';
+      document.getElementById('drStartQ').value = '';
+      document.getElementById('drEndQ').value   = '';
+      drawQuarterlyChart(); });
+
+  } catch (err) {
+    console.error('Failed to load CSV data:', err);
+    document.getElementById('loadingOverlay').innerHTML =
+      '<div style="color:#f03e3e;font-family:monospace;font-size:14px">⚠ Error loading CSV files. Check paths.</div>';
+    return;
+  }
+  hideLoading();
+});
+
+// ── Get filtered + aggregated slice ────────────────────
+function getSliceDaily() {
+  let data = dailyData;
+  if (dailyStart || dailyEnd) {
+    data = filterByDateRange(data, dailyStart, dailyEnd);
+  } else if (dailyN) {
+    data = lastN(data, dailyN);
+  }
+  if (dailyFreq === 'weekly')  return aggregateWeekly(data, DAILY_SUM_COLS);
+  if (dailyFreq === 'monthly') return aggregateMonthly(data, DAILY_SUM_COLS);
+  return data;
+}
+
+function getSliceQuarterly() {
+  let data = quarterlyData;
+  if (quarterlyStart || quarterlyEnd) {
+    data = filterByDateRange(data, quarterlyStart, quarterlyEnd);
+  } else if (quarterlyN) {
+    data = lastN(data, quarterlyN);
+  }
+  if (quarterlyFreq === 'weekly')  return aggregateWeekly(data, Q_SUM_COLS);
+  if (quarterlyFreq === 'monthly') return aggregateMonthly(data, Q_SUM_COLS);
+  return data;
+}
+
+// ── KPI Population ─────────────────────────────────────
+function populateKPIs() {
+  const last  = dailyData[dailyData.length - 1] || {};
+  const prev  = dailyData[dailyData.length - 2] || {};
+  const qLast = quarterlyData[quarterlyData.length - 1] || {};
+  const qPrev = quarterlyData[quarterlyData.length - 2] || {};
+
+  setLastUpdated(last?.Date);
+  document.getElementById('kpiDate').textContent = last?.Date ? 'AS OF ' + last.Date : '';
+
+  updateKpiCard('kpi-up2',  'chg-up2',  last.Number_of_stocks_up_2pct,   prev.Number_of_stocks_up_2pct,   'integer');
+  updateKpiCard('kpi-dn2',  'chg-dn2',  last.Number_of_stocks_down_2pct, prev.Number_of_stocks_down_2pct, 'integer');
+  updateKpiCard('kpi-ad5',  'chg-ad5',  last.AD_ratio_5day,              prev.AD_ratio_5day,              'decimal');
+  updateKpiCard('kpi-ad10', 'chg-ad10', last.AD_ratio_10day,             prev.AD_ratio_10day,             'decimal');
+  updateKpiCard('kpi-qup',  'chg-qup',  qLast.Number_of_stocks_up_10pct_quarterly,   qPrev.Number_of_stocks_up_10pct_quarterly,   'integer');
+  updateKpiCard('kpi-qdn',  'chg-qdn',  qLast.Number_of_stocks_down_10pct_quarterly, qPrev.Number_of_stocks_down_10pct_quarterly, 'integer');
+
+  const SPARK = 30;
+  const tail  = (arr, col) => lastN(arr, SPARK).map(r => r[col] ?? 0);
+  buildSparkline('spark-up2',  tail(dailyData, 'Number_of_stocks_up_2pct'),   '#00c853');
+  buildSparkline('spark-dn2',  tail(dailyData, 'Number_of_stocks_down_2pct'), '#f03e3e');
+  buildSparkline('spark-ad5',  tail(dailyData, 'AD_ratio_5day'),              '#228be6');
+  buildSparkline('spark-ad10', tail(dailyData, 'AD_ratio_10day'),             '#fd7e14');
+  buildSparkline('spark-qup',  tail(quarterlyData, 'Number_of_stocks_up_10pct_quarterly'),   '#00c853');
+  buildSparkline('spark-qdn',  tail(quarterlyData, 'Number_of_stocks_down_10pct_quarterly'), '#f03e3e');
+}
+
+// ── Daily Charts ───────────────────────────────────────
+function drawDailyCharts() {
+  const slice  = getSliceDaily();
+  const labels = slice.map(r => r.Date);
+  const up2    = slice.map(r => r.Number_of_stocks_up_2pct   ?? 0);
+  const dn2    = slice.map(r => r.Number_of_stocks_down_2pct ?? 0);
+  const ad5    = slice.map(r => r.AD_ratio_5day  ?? null);
+  const ad10   = slice.map(r => r.AD_ratio_10day ?? null);
+
+  destroyChart(chartDailyBars);
+  const ctx1 = document.getElementById('chart-dailyBars').getContext('2d');
+  chartDailyBars = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Up >2%',   data: up2,          backgroundColor: 'rgba(0,200,83,0.75)',  borderWidth: 0, borderRadius: 2 },
+        { label: 'Down >2%', data: dn2.map(v=>-v), backgroundColor: 'rgba(240,62,62,0.72)', borderWidth: 0, borderRadius: 2 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${Math.abs(ctx.raw)}` } }
+      },
+      scales: {
+        x: { ticks: { maxTicksLimit: 10, maxRotation: 0, callback: sparseTickCallback(10, labels, formatDateShort) }, grid: { display: false } },
+        y: { ticks: { callback: (v) => Math.abs(v) }, grid: { color: 'rgba(0,0,0,0.04)' } }
+      }
+    }
+  });
+
+  destroyChart(chartAdRatio);
+  const ctx2 = document.getElementById('chart-adRatio').getContext('2d');
+  chartAdRatio = new Chart(ctx2, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: '5-Day A/D',  data: ad5,  borderColor: '#228be6', backgroundColor: createGradient(ctx2, '#228be6', 0.18, 0), borderWidth: 2, pointRadius: 0, tension: 0.35, fill: true, spanGaps: true },
+        { label: '10-Day A/D', data: ad10, borderColor: '#fd7e14', backgroundColor: createGradient(ctx2, '#fd7e14', 0.15, 0), borderWidth: 2, pointRadius: 0, tension: 0.35, fill: true, spanGaps: true },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(3) ?? '–'}` } } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 10, maxRotation: 0, callback: sparseTickCallback(10, labels, formatDateShort) }, grid: { display: false } },
+        y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { callback: (v) => v.toFixed(2) } }
+      }
+    }
+  });
+}
+
+// ── Quarterly Chart ────────────────────────────────────
+function drawQuarterlyChart() {
+  const slice  = getSliceQuarterly();
+  const labels = slice.map(r => r.Date);
+  const qUp    = slice.map(r => r.Number_of_stocks_up_10pct_quarterly   ?? 0);
+  const qDn    = slice.map(r => r.Number_of_stocks_down_10pct_quarterly ?? 0);
+
+  destroyChart(chartQuarterly);
+  const ctx = document.getElementById('chart-quarterly').getContext('2d');
+  chartQuarterly = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Up >10% Q',   data: qUp,          backgroundColor: 'rgba(0,200,83,0.72)',  borderWidth: 0, borderRadius: 2 },
+        { label: 'Down >10% Q', data: qDn.map(v=>-v), backgroundColor: 'rgba(240,62,62,0.68)', borderWidth: 0, borderRadius: 2 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${Math.abs(ctx.raw)}` } }
+      },
+      scales: {
+        x: { ticks: { maxTicksLimit: 12, maxRotation: 0, callback: sparseTickCallback(12, labels, formatDateShort) }, grid: { display: false } },
+        y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { callback: (v) => Math.abs(v) } }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
