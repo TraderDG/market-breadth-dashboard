@@ -44,6 +44,7 @@ FOLDER_IDS = {
     "New_High_New_Low":  "191dL7nqaMR5p7IxCUnMF9C4cN8k0vSiA",
     "Moving_Average":    "1jcIm6a55khr-H0WdrPpqn-MEmRr_g8-0",
     "Common":            "1dcGXbBBRvzxry2Xqy723p1Tvd8Fl6N1G",
+    "Sectors":           "1KMWRdU5iDC7zNEYMWdpFuRK4_tsY3kan",
 }
 
 # ─── FILE NAME MAPPING ────────────────────────────────────────────────────────
@@ -111,16 +112,16 @@ FILE_MAP = {
 
     # Sector (✅ direct data)
     "VNINDEX": ("CSV2_ROOT", "VNINDEX.csv"),
-    "VNENE":   ("Common", "VNENE.csv"),
-    "VNCOND":  ("Common", "VNCOND.csv"),
-    "VNCONS":  ("Common", "VNCONS.csv"),
-    "VNFIN":   ("Common", "VNFIN.csv"),
-    "VNHEAL":  ("Common", "VNHEAL.csv"),
-    "VNIND":   ("Common", "VNIND.csv"),
-    "VNIT":    ("Common", "VNIT.csv"),
-    "VNMAT":   ("Common", "VNMAT.csv"),
-    "VNREAL":  ("Common", "VNREAL.csv"),
-    "VNUTI":   ("Common", "VNUTI.csv"),
+    "VNENE":   ("Sectors", "VNENE.csv"),
+    "VNCOND":  ("Sectors", "VNCOND.csv"),
+    "VNCONS":  ("Sectors", "VNCONS.csv"),
+    "VNFIN":   ("Sectors", "VNFIN.csv"),
+    "VNHEAL":  ("Sectors", "VNHEAL.csv"),
+    "VNIND":   ("Sectors", "VNIND.csv"),
+    "VNIT":    ("Sectors", "VNIT.csv"),
+    "VNMAT":   ("Sectors", "VNMAT.csv"),
+    "VNREAL":  ("Sectors", "VNREAL.csv"),
+    "VNUTI":   ("Sectors", "VNUTI.csv"),
 }
 
 SECTOR_NAMES = ["VNENE", "VNCOND", "VNCONS", "VNFIN", "VNHEAL",
@@ -219,23 +220,30 @@ def download_csv(file_id: str, indicator_name: str) -> pd.DataFrame:
     buf.seek(0)
 
     try:
-        # Drive CSVs have format: Date,Open,High,Low,Close,
-        # Value is stored in ALL OHLC columns (they're identical)
-        df = pd.read_csv(
-            buf,
-            parse_dates=["Date"],
-            dayfirst=False,
-            infer_datetime_format=True,
-        )
-        # Normalize column names
+        df = pd.read_csv(buf)
         df.columns = df.columns.str.strip()
-        # Drop trailing unnamed columns (from trailing comma)
         df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
-        # Use 'Close' as the value column
-        value_col = "Close" if "Close" in df.columns else df.columns[-1]
-        df = df[["Date", value_col]].rename(columns={value_col: indicator_name})
-        df["Date"] = pd.to_datetime(df["Date"], infer_datetime_format=True)
+
+        # Detect date column: "Date" (breadth files) or "datetime" (sector files)
+        if "Date" in df.columns:
+            date_col = "Date"
+        elif "datetime" in df.columns:
+            date_col = "datetime"
+        else:
+            date_col = df.columns[0]
+
+        # Detect value column: prefer "Close"/"close", else last numeric column
+        cols_lower = {c.lower(): c for c in df.columns}
+        if "close" in cols_lower:
+            value_col = cols_lower["close"]
+        else:
+            value_col = df.select_dtypes("number").columns[-1]
+
+        df = df[[date_col, value_col]].rename(columns={date_col: "Date", value_col: indicator_name})
+        df["Date"] = pd.to_datetime(df["Date"], dayfirst=False)
         df = df.dropna(subset=["Date"]).set_index("Date").sort_index()
+        # Keep only the date part (drop time component)
+        df.index = df.index.normalize()
         df[indicator_name] = pd.to_numeric(df[indicator_name], errors="coerce")
         return df
     except Exception as e:
