@@ -1,0 +1,23 @@
+# Market Breadth Dashboard — Dependencies
+# Python 3.10+
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+pyarrow>=12.0.0  # for parquet
+
+# Google Drive API
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.1.0
+
+# API backend
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Frontend
+streamlit>=1.28.0
+plotly>=5.18.0
+
+# HTTP
+requests>=2.31.0
